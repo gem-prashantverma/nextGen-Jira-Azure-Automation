@@ -12,6 +12,98 @@ visited_tickets = set()
 # Dictionary to hold the hierarchy flowchart in JSON format
 ticket_hierarchy = {}
 
+def validate_jira_credentials(jira_base_url, email, api_token):
+    """
+    Validates Jira credentials by attempting to fetch user information.
+    Args:
+        jira_base_url (str): The base URL of the Jira instance.
+        email (str): The Jira username (email).
+        api_token (str): The API token for Jira.
+    Returns:
+        bool: True if the credentials are valid, otherwise False.
+    """
+    jira_api_url = f"{jira_base_url}/rest/api/2/myself"
+    response = requests.get(
+        jira_api_url,
+        auth=HTTPBasicAuth(email, api_token),
+        headers={'Content-Type': 'application/json'}
+    )
+
+    try:
+        # Try to parse the JSON response
+        response_data = response.json()
+
+        if response.status_code == 200:
+            return True
+        else:
+            print(f"Invalid Jira credentials: {response.status_code} - {response_data.get('errorMessages', 'Unknown error')}")
+            return False
+    except requests.exceptions.JSONDecodeError:
+        # Handle the case where the response is not JSON
+        print(f"Invalid response from Jira when validating credentials. Status Code: {response.status_code}, Response Text: {check_html_content(response.text)}")
+        return False
+
+
+
+def check_html_content(data):
+    """
+    Check if the input data is of HTML type.
+    
+    Args:
+        data (str): Input data to be checked.
+        
+    Returns:
+        str: Returns the HTML content if it's HTML; otherwise, returns the input string.
+    """
+    # Strip whitespace and check for common HTML characteristics
+    # stripped_data = data.strip()
+    
+    # Check for the presence of common HTML tags
+    stripped_data = data.strip()
+    if data.strip().startswith('<!DOCTYPE html>') or re.search(r'<[^>]+>', stripped_data):  # Checks for any HTML-like tags
+        return 'The site may be unavailable or the URL is incorrect.'  # Return the HTML content
+    else:
+        return str(data)  # Return the input data as a string
+
+
+def validate_jira_ticket_access(ticket_key, jira_base_url, email, api_token):
+    """
+    Validates if the user has access to the Jira ticket (epic link) and checks if the ticket belongs to the given base URL.
+    Args:
+        ticket_key (str): The Jira ticket key (e.g., 'COM-1258').
+        jira_base_url (str): The base URL of the Jira instance.
+        email (str): The Jira username (email).
+        api_token (str): The API token for Jira.
+    Returns:
+        bool: True if the user has access and the ticket is valid, otherwise False.
+    """
+    jira_api_url = f"{jira_base_url}/rest/api/2/issue/{ticket_key}"
+    response = requests.get(
+        jira_api_url,
+        auth=HTTPBasicAuth(email, api_token),
+        headers={'Content-Type': 'application/json'}
+    )
+
+    try:
+        # Try to parse the JSON response
+        response_data = response.json()
+
+        if response.status_code == 200:
+            # Additional check to ensure the ticket is part of the given Jira base URL
+            if jira_base_url not in response_data.get('self', ''):
+                print(f"The ticket {ticket_key} does not belong to the Jira base URL: {jira_base_url}")
+                return False
+            return True
+        else:
+            print(f"Access denied to ticket {ticket_key}: {response.status_code} - {response_data.get('errorMessages', 'Unknown error')}")
+            return False
+    except requests.exceptions.JSONDecodeError:
+        # Handle the case where the response is not JSON
+        print(f"Invalid response from Jira when validating ticket access. Status Code: {response.status_code}, Response Text: {response.text}")
+        return False
+
+
+
 def extract_ticket_key_from_url(jira_url):
     """
     Extracts the Jira ticket key from a Jira issue URL.
@@ -49,12 +141,12 @@ def get_ticket_data(ticket_key, jira_base_url, email, api_token):
         headers={'Content-Type': 'application/json'}
     )
 
-    if response.status_code == 200:
+    try:
         ticket_data = response.json()
         ticket_cache[ticket_key] = ticket_data
         return ticket_data
-    else:
-        print(f"Failed to retrieve data for ticket {ticket_key}: {response.status_code}")
+    except requests.exceptions.JSONDecodeError:
+        print(f"Failed to retrieve data for ticket {ticket_key}: Status Code {response.status_code}, Response Text: {response.text}")
         return None
 
 def collect_ticket_information(ticket_key, jira_base_url, email, api_token, parent_ticket=None):
@@ -159,7 +251,15 @@ def main():
     # Extracting Jira base URL from the provided Jira link
     jira_base_url = re.match(r"(https://[^/]+)", jira_url).group(1)
 
-    # Collecting ticket information recursively for the ticket and its linked issues
+    # Step 1: Validate Jira credentials
+    if not validate_jira_credentials(jira_base_url, email, api_token):
+        return
+
+    # Step 2: Validate access to the given Jira ticket (epic link)
+    if not validate_jira_ticket_access(ticket_key, jira_base_url, email, api_token):
+        return
+
+    # Step 3: Collecting ticket information recursively for the ticket and its linked issues
     ticket_details = collect_ticket_information(ticket_key, jira_base_url, email, api_token)
 
     # Displaying all collected ticket details
