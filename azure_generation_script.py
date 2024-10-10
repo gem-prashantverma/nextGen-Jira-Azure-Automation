@@ -67,6 +67,26 @@ def find_key_containing(fields, search_term):
             return value
     return None
 
+
+
+def collect_work_item_descriptions(work_item_map, hierarchy, work_item_id=None, level=0):
+    """Collect the hierarchy and descriptions into a single string."""
+    result = ""
+    indent = "  " * level
+    if work_item_id is None:
+        # Handle top-level items (those without a parent)
+        for top_level_item in hierarchy.get(None, []):
+            result += f"{indent}Work Item ID: {top_level_item}\n{work_item_map.get(top_level_item, '')}\n\n"
+            result += collect_work_item_descriptions(work_item_map, hierarchy, top_level_item, level + 1)
+    else:
+        # Handle child items
+        for child_item in hierarchy.get(work_item_id, []):
+            result += f"{indent}Work Item ID: {child_item}\n{work_item_map.get(child_item, '')}\n\n"
+            result += collect_work_item_descriptions(work_item_map, hierarchy, child_item, level + 1)
+    return result
+
+
+
 def collect_work_item_descriptions_and_hierarchy(projects, organization_url, work_item_id, pat, visited_ids=None, work_item_map=None, hierarchy=None, fetched_work_items=None):
     """Recursively collect work item descriptions and build a parent-child hierarchy tree."""
     if visited_ids is None:
@@ -187,8 +207,8 @@ def main():
     # Collect work item descriptions and hierarchy
     work_item_map, hierarchy = collect_work_item_descriptions_and_hierarchy(projects, organization_url, epic_id, pat)
 
-    print(hierarchy)
-    for work_item_id, description in work_item_map.items():
-        print(f"Work Item ID: {work_item_id}\n{description}\n")
+    result = collect_work_item_descriptions(work_item_map, hierarchy)
+    
+    print(result)
 if __name__ == "__main__":
     main()
