@@ -219,21 +219,25 @@ def display_ticket_hierarchy(ticket_hierarchy):
 
 def display_ticket_details(ticket_details):
     """
-    Displays details of the Jira tickets in a human-readable format.
+    Returns details of the Jira tickets as a single concatenated string.
     Args:
         ticket_details (list): List of dictionaries containing ticket information.
+    Returns:
+        str: A single string with all ticket details appended.
     """
+    output = ""
     for ticket in ticket_details:
-        print(f"Issue Key: {ticket['key']}")
-        print(f"Summary: {ticket['summary']}")
-        print(f"Description: {ticket['description']}")
-        print(f"Status: {ticket['status']}")
-        print(f"Acceptance Criteria: {ticket['acceptance_criteria']}")
+        output += f"Issue Key: {ticket['key']}\n"
+        output += f"Summary: {ticket['summary']}\n"
+        output += f"Description: {ticket['description']}\n"
+        output += f"Status: {ticket['status']}\n"
+        output += f"Acceptance Criteria: {ticket['acceptance_criteria']}\n"
         if ticket['comments']:
-            print("Comments:")
+            output += "Comments:\n"
             for comment in ticket['comments']:
-                print(f"- {comment}")
-        print("\n")
+                output += f"- {comment}\n"
+        output += "\n"
+    return output
 
 def main():
     """
@@ -262,11 +266,13 @@ def main():
     # Step 3: Collecting ticket information recursively for the ticket and its linked issues
     ticket_details = collect_ticket_information(ticket_key, jira_base_url, email, api_token)
 
-    # Displaying all collected ticket details
-    display_ticket_details(ticket_details)
+    # Displaying all collected ticket details as a single string
+    all_ticket_details = display_ticket_details(ticket_details)
+    print(all_ticket_details)
 
     # Displaying the ticket hierarchy flowchart in JSON format
-    display_ticket_hierarchy(ticket_hierarchy)
+    # display_ticket_hierarchy(ticket_hierarchy)
 
 if __name__ == "__main__":
     main()
+
