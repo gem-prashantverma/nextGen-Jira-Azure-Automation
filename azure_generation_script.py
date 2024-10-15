@@ -3,10 +3,29 @@ from requests.auth import HTTPBasicAuth
 from urllib.parse import urlparse, parse_qs
 from bs4 import BeautifulSoup
 
-
 def remove_trailing_slash(input_string):
     """Remove trailing slash if present, otherwise leave the string unchanged."""
     return input_string[:-1] if input_string.endswith('/') else input_string
+
+def is_valid_azure_boards_url(epic_link):
+    """Validate if the provided URL is a valid Azure Boards link."""
+    parsed_url = urlparse(epic_link)
+    if parsed_url.scheme in ['http', 'https'] and 'dev.azure.com' in parsed_url.netloc:
+        return True
+    return False
+
+def validate_pat_access(organization_url, pat):
+    """Validate if the provided PAT token can access the Azure DevOps organization."""
+    url = f"{organization_url}/_apis/projects?api-version=7.0"
+    response = requests.get(url, auth=HTTPBasicAuth('', pat))
+    
+    if response.status_code == 200:
+        return True
+    elif response.status_code == 401:
+        print("Invalid PAT token or unauthorized access.")
+    else:
+        print(f"Failed to validate PAT: {response.status_code} - {response.text}")
+    return False
 
 def extract_work_item_id(epic_link):
     """Extract the work item ID from the epic link (supports both query parameter and path)."""
@@ -67,8 +86,6 @@ def find_key_containing(fields, search_term):
             return value
     return None
 
-
-
 def collect_work_item_descriptions(work_item_map, hierarchy, work_item_id=None, level=0):
     """Collect the hierarchy and descriptions into a single string."""
     result = ""
@@ -84,8 +101,6 @@ def collect_work_item_descriptions(work_item_map, hierarchy, work_item_id=None, 
             result += f"{indent}Work Item ID: {child_item}\n{work_item_map.get(child_item, '')}\n\n"
             result += collect_work_item_descriptions(work_item_map, hierarchy, child_item, level + 1)
     return result
-
-
 
 def collect_work_item_descriptions_and_hierarchy(projects, organization_url, work_item_id, pat, visited_ids=None, work_item_map=None, hierarchy=None, fetched_work_items=None):
     """Recursively collect work item descriptions and build a parent-child hierarchy tree."""
@@ -183,6 +198,11 @@ def main():
     # Remove trailing slash from epic link
     epic_link = remove_trailing_slash(epic_link)
     
+    # Validate the epic link
+    if not is_valid_azure_boards_url(epic_link):
+        print("Invalid URL. Please enter a valid Azure Boards link.")
+        return
+    
     # Extract work item ID from the epic link
     epic_id = extract_work_item_id(epic_link)
     if not epic_id:
@@ -198,6 +218,10 @@ def main():
     # Construct the organization URL
     organization_url = f"https://dev.azure.com/{organization_name}"
 
+    # Validate PAT token
+    if not validate_pat_access(organization_url, pat):
+        return
+
     # Fetch all projects
     projects = get_projects(organization_url, pat)
     if not projects:
@@ -210,5 +234,6 @@ def main():
     result = collect_work_item_descriptions(work_item_map, hierarchy)
     
     print(result)
+
 if __name__ == "__main__":
     main()
